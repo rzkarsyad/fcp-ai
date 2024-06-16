@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
@@ -12,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
@@ -165,7 +165,6 @@ func convertAnswer(answerStr string) string {
 }
 
 func main() {
-
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file:", err)
@@ -191,56 +190,64 @@ func main() {
 		return
 	}
 
-	fmt.Print("Please enter your query: ")
-	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		fmt.Println("Failed to read input:", scanner.Err())
-		return
-	}
-	query := scanner.Text()
+	router := gin.Default()
 
-	connector := &AIModelConnector{
-		Client: &http.Client{},
-	}
+	router.Static("/static", "./static")
 
-	inputs := Inputs{
-		Table: table,
-		Query: query,
-	}
+	router.GET("/", func(c *gin.Context) {
+		c.File("templates/index.html")
+	})
 
-	token := os.Getenv("HUGGINGFACE_TOKEN")
-	if token == "" {
-		fmt.Println("HUGGINGFACE_TOKEN environment variable not set.")
-		return
-	}
-
-	response, err := connector.ConnectAIModel(inputs, token)
-	if err != nil {
-		fmt.Println("Error connecting to AI model:", err)
-		return
-	}
-
-	answerConverted := convertAnswer(response.Answer)
-	fmt.Println("Initial Answer:", response.Answer)
-	fmt.Println("Converted Answer:", answerConverted)
-
-	apiKey := os.Getenv("API_KEY_GEMINI")
-	if apiKey == "" {
-		fmt.Println("API_KEY_GEMINI environment variable not set.")
-		return
-	}
-
-	geminiResponse, err := connector.GeminiRecommendation(query, table, apiKey)
-	if err != nil {
-		fmt.Println("Error getting Gemini recommendation:", err)
-		return
-	}
-
-	fmt.Println("Recommendation:")
-	for _, candidate := range geminiResponse.Candidates {
-		for _, part := range candidate.Content.Parts {
-			fmt.Println(part.Text)
+	router.POST("/", func(c *gin.Context) {
+		var input struct {
+			Query string `json:"query"`
 		}
-	}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
+		connector := &AIModelConnector{
+			Client: &http.Client{},
+		}
+
+		inputs := Inputs{
+			Table: table,
+			Query: input.Query,
+		}
+
+		token := os.Getenv("HUGGINGFACE_TOKEN")
+		if token == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "HUGGINGFACE_TOKEN environment variable not set"})
+			return
+		}
+
+		response, err := connector.ConnectAIModel(inputs, token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error connecting to AI model"})
+			return
+		}
+
+		answerConverted := convertAnswer(response.Answer)
+
+		apiKey := os.Getenv("API_KEY_GEMINI")
+		if apiKey == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "API_KEY_GEMINI environment variable not set"})
+			return
+		}
+
+		geminiResponse, err := connector.GeminiRecommendation(input.Query, table, apiKey)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting Gemini recommendation"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"tapas_answer":           response.Answer,
+			"tapas_answer_converted": answerConverted,
+			"gemini_recommendations": geminiResponse.Candidates,
+		})
+	})
+
+	router.Run(":8080")
 }
