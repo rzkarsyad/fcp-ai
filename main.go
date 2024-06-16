@@ -213,21 +213,15 @@ func main() {
 		fmt.Println("Cells:", response.Cells)
 		fmt.Println("Aggregator:", response.Aggregator)
 
-		consumption, err := strconv.ParseFloat(response.Cells[0], 64)
-		if err != nil {
-			fmt.Println("Error parsing consumption:", err)
-			return
-		}
+		recommendationPrompt := fmt.Sprintf("Based on the data provided, the total energy consumption is %s", answerConverted)
 
-		prompt := fmt.Sprintf("Recommendation for energy saving based on the predicted consumption of %.1f kWh", consumption)
-
-		gpt2Response, err := connector.GenerateGPT2Recommendation(prompt, token)
+		gpt2Response, err := connector.GenerateGPT2Recommendation(recommendationPrompt, token)
 		if err != nil {
 			fmt.Println("Error generating recommendation using GPT-2:", err)
 			return
 		}
 
-		fmt.Println("GPT-2 Recommendation:", gpt2Response.GeneratedText)
+		fmt.Print("GPT-2 Recommendation:", gpt2Response.GeneratedText)
 	}
 
 	if err := scanner.Err(); err != nil {
