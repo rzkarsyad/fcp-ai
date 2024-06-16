@@ -30,6 +30,10 @@ type Response struct {
 	Aggregator  string   `json:"aggregator"`
 }
 
+type GPT2Response struct {
+	GeneratedText string `json:"generated_text"`
+}
+
 func CsvToSlice(data string) (map[string][]string, error) {
 	r := csv.NewReader(strings.NewReader(data))
 	records, err := r.ReadAll()
@@ -79,20 +83,55 @@ func (c *AIModelConnector) ConnectAIModel(payload interface{}, token string) (Re
 		return Response{}, err
 	}
 
-	var rawResponse map[string]interface{}
-	err = json.Unmarshal(body, &rawResponse)
+	var response Response
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return Response{}, err
 	}
 
-	response := Response{
-		Answer:      rawResponse["answer"].(string),
-		Coordinates: parseCoordinates(rawResponse["coordinates"].([]interface{})),
-		Cells:       parseCells(rawResponse["cells"].([]interface{})),
-		Aggregator:  rawResponse["aggregator"].(string),
+	return response, nil
+}
+
+func (c *AIModelConnector) GenerateGPT2Recommendation(prompt string, token string) (GPT2Response, error) {
+	url := "https://api-inference.huggingface.co/models/openai-community/gpt2"
+	payload := map[string]string{
+		"inputs": prompt,
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return GPT2Response{}, err
 	}
 
-	return response, nil
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return GPT2Response{}, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return GPT2Response{}, err
+	}
+	defer resp.Body.Close()
+
+	var responseArray []map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&responseArray)
+	if err != nil {
+		return GPT2Response{}, err
+	}
+
+	if len(responseArray) == 0 {
+		return GPT2Response{}, fmt.Errorf("empty response from GPT-2")
+	}
+
+	generatedText, ok := responseArray[0]["generated_text"].(string)
+	if !ok {
+		return GPT2Response{}, fmt.Errorf("failed to parse 'generated_text' from response")
+	}
+
+	return GPT2Response{GeneratedText: generatedText}, nil
 }
 
 func convertAnswer(answerStr string) string {
@@ -110,28 +149,6 @@ func convertAnswer(answerStr string) string {
 	answerConverted := fmt.Sprintf("%.1f kWh", sum)
 
 	return answerConverted
-}
-
-func parseCoordinates(coordinatesRaw []interface{}) [][]int {
-	coordinates := make([][]int, len(coordinatesRaw))
-	for i, coord := range coordinatesRaw {
-		coordArr := coord.([]interface{})
-		coordinates[i] = []int{int(coordArr[0].(float64)), int(coordArr[1].(float64))}
-	}
-	return coordinates
-}
-
-func parseCells(cellsRaw []interface{}) []string {
-	cells := make([]string, len(cellsRaw))
-	for i, cell := range cellsRaw {
-		switch v := cell.(type) {
-		case float64:
-			cells[i] = fmt.Sprintf("%.1f", v)
-		default:
-			cells[i] = fmt.Sprintf("%v", v)
-		}
-	}
-	return cells
 }
 
 func main() {
@@ -191,4 +208,20 @@ func main() {
 	fmt.Println("Coordinates:", response.Coordinates)
 	fmt.Println("Cells:", response.Cells)
 	fmt.Println("Aggregator:", response.Aggregator)
+
+	consumption, err := strconv.ParseFloat(response.Cells[0], 64)
+	if err != nil {
+		fmt.Println("Error parsing consumption:", err)
+		return
+	}
+
+	prompt := fmt.Sprintf("Recommendation for energy saving based on the predicted consumption of %.1f kWh", consumption)
+
+	gpt2Response, err := connector.GenerateGPT2Recommendation(prompt, token)
+	if err != nil {
+		fmt.Println("Error generating recommendation using GPT-2:", err)
+		return
+	}
+
+	fmt.Println("GPT-2 Recommendation:", gpt2Response.GeneratedText)
 }
