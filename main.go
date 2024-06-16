@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
@@ -178,50 +179,59 @@ func main() {
 		return
 	}
 
-	query := "What is the total energy consumption for tomorrow?"
+	fmt.Print("Please enter your query: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		query := scanner.Text()
 
-	connector := &AIModelConnector{
-		Client: &http.Client{},
+		connector := &AIModelConnector{
+			Client: &http.Client{},
+		}
+
+		inputs := Inputs{
+			Table: table,
+			Query: query,
+		}
+
+		token := os.Getenv("HUGGINGFACE_TOKEN")
+		if token == "" {
+			fmt.Println("HUGGINGFACE_TOKEN environment variable not set.")
+			return
+		}
+
+		response, err := connector.ConnectAIModel(inputs, token)
+		if err != nil {
+			fmt.Println("Error connecting to AI model:", err)
+			return
+		}
+
+		answerConverted := convertAnswer(response.Answer)
+
+		fmt.Println("AnswerConverted:", answerConverted)
+		fmt.Println("Answer:", response.Answer)
+		fmt.Println("Coordinates:", response.Coordinates)
+		fmt.Println("Cells:", response.Cells)
+		fmt.Println("Aggregator:", response.Aggregator)
+
+		consumption, err := strconv.ParseFloat(response.Cells[0], 64)
+		if err != nil {
+			fmt.Println("Error parsing consumption:", err)
+			return
+		}
+
+		prompt := fmt.Sprintf("Recommendation for energy saving based on the predicted consumption of %.1f kWh", consumption)
+
+		gpt2Response, err := connector.GenerateGPT2Recommendation(prompt, token)
+		if err != nil {
+			fmt.Println("Error generating recommendation using GPT-2:", err)
+			return
+		}
+
+		fmt.Println("GPT-2 Recommendation:", gpt2Response.GeneratedText)
 	}
 
-	inputs := Inputs{
-		Table: table,
-		Query: query,
-	}
-
-	token := os.Getenv("HUGGINGFACE_TOKEN")
-	if token == "" {
-		fmt.Println("HUGGINGFACE_TOKEN environment variable not set.")
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading input:", err)
 		return
 	}
-
-	response, err := connector.ConnectAIModel(inputs, token)
-	if err != nil {
-		fmt.Println("Error connecting to AI model:", err)
-		return
-	}
-
-	answerConverted := convertAnswer(response.Answer)
-
-	fmt.Println("AnswerConverted:", answerConverted)
-	fmt.Println("Answer:", response.Answer)
-	fmt.Println("Coordinates:", response.Coordinates)
-	fmt.Println("Cells:", response.Cells)
-	fmt.Println("Aggregator:", response.Aggregator)
-
-	consumption, err := strconv.ParseFloat(response.Cells[0], 64)
-	if err != nil {
-		fmt.Println("Error parsing consumption:", err)
-		return
-	}
-
-	prompt := fmt.Sprintf("Recommendation for energy saving based on the predicted consumption of %.1f kWh", consumption)
-
-	gpt2Response, err := connector.GenerateGPT2Recommendation(prompt, token)
-	if err != nil {
-		fmt.Println("Error generating recommendation using GPT-2:", err)
-		return
-	}
-
-	fmt.Println("GPT-2 Recommendation:", gpt2Response.GeneratedText)
 }
