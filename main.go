@@ -31,8 +31,14 @@ type Response struct {
 	Aggregator  string   `json:"aggregator"`
 }
 
-type GPT2Response struct {
-	GeneratedText string `json:"generated_text"`
+type GeminiResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
 }
 
 func CsvToSlice(data string) (map[string][]string, error) {
@@ -93,46 +99,52 @@ func (c *AIModelConnector) ConnectAIModel(payload interface{}, token string) (Re
 	return response, nil
 }
 
-func (c *AIModelConnector) GenerateGPT2Recommendation(prompt string, token string) (GPT2Response, error) {
-	url := "https://api-inference.huggingface.co/models/openai-community/gpt2"
-	payload := map[string]string{
-		"inputs": prompt,
+func (c *AIModelConnector) GeminiRecommendation(query string, table map[string][]string, token string) (GeminiResponse, error) {
+
+	prompt := query + "\n"
+	for column, values := range table {
+		prompt += column + ": " + strings.Join(values, ", ") + "\n"
 	}
+
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + token
+
+	payload := map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"parts": []map[string]interface{}{
+					{
+						"text": prompt,
+					},
+				},
+			},
+		},
+	}
+
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return GPT2Response{}, err
+		return GeminiResponse{}, err
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return GPT2Response{}, err
+		return GeminiResponse{}, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return GPT2Response{}, err
+		return GeminiResponse{}, err
 	}
 	defer resp.Body.Close()
 
-	var responseArray []map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&responseArray)
+	var geminiResponse GeminiResponse
+	err = json.NewDecoder(resp.Body).Decode(&geminiResponse)
 	if err != nil {
-		return GPT2Response{}, err
+		return GeminiResponse{}, err
 	}
 
-	if len(responseArray) == 0 {
-		return GPT2Response{}, fmt.Errorf("empty response from GPT-2")
-	}
-
-	generatedText, ok := responseArray[0]["generated_text"].(string)
-	if !ok {
-		return GPT2Response{}, fmt.Errorf("failed to parse 'generated_text' from response")
-	}
-
-	return GPT2Response{GeneratedText: generatedText}, nil
+	return geminiResponse, nil
 }
 
 func convertAnswer(answerStr string) string {
@@ -181,51 +193,54 @@ func main() {
 
 	fmt.Print("Please enter your query: ")
 	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		query := scanner.Text()
-
-		connector := &AIModelConnector{
-			Client: &http.Client{},
-		}
-
-		inputs := Inputs{
-			Table: table,
-			Query: query,
-		}
-
-		token := os.Getenv("HUGGINGFACE_TOKEN")
-		if token == "" {
-			fmt.Println("HUGGINGFACE_TOKEN environment variable not set.")
-			return
-		}
-
-		response, err := connector.ConnectAIModel(inputs, token)
-		if err != nil {
-			fmt.Println("Error connecting to AI model:", err)
-			return
-		}
-
-		answerConverted := convertAnswer(response.Answer)
-
-		fmt.Println("AnswerConverted:", answerConverted)
-		fmt.Println("Answer:", response.Answer)
-		fmt.Println("Coordinates:", response.Coordinates)
-		fmt.Println("Cells:", response.Cells)
-		fmt.Println("Aggregator:", response.Aggregator)
-
-		recommendationPrompt := fmt.Sprintf("Based on the data provided, the total energy consumption is %s", answerConverted)
-
-		gpt2Response, err := connector.GenerateGPT2Recommendation(recommendationPrompt, token)
-		if err != nil {
-			fmt.Println("Error generating recommendation using GPT-2:", err)
-			return
-		}
-
-		fmt.Print("GPT-2 Recommendation:", gpt2Response.GeneratedText)
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Error reading input:", err)
+	if !scanner.Scan() {
+		fmt.Println("Failed to read input:", scanner.Err())
 		return
 	}
+	query := scanner.Text()
+
+	connector := &AIModelConnector{
+		Client: &http.Client{},
+	}
+
+	inputs := Inputs{
+		Table: table,
+		Query: query,
+	}
+
+	token := os.Getenv("HUGGINGFACE_TOKEN")
+	if token == "" {
+		fmt.Println("HUGGINGFACE_TOKEN environment variable not set.")
+		return
+	}
+
+	response, err := connector.ConnectAIModel(inputs, token)
+	if err != nil {
+		fmt.Println("Error connecting to AI model:", err)
+		return
+	}
+
+	answerConverted := convertAnswer(response.Answer)
+	fmt.Println("Initial Answer:", response.Answer)
+	fmt.Println("Converted Answer:", answerConverted)
+
+	apiKey := os.Getenv("API_KEY_GEMINI")
+	if apiKey == "" {
+		fmt.Println("API_KEY_GEMINI environment variable not set.")
+		return
+	}
+
+	geminiResponse, err := connector.GeminiRecommendation(query, table, apiKey)
+	if err != nil {
+		fmt.Println("Error getting Gemini recommendation:", err)
+		return
+	}
+
+	fmt.Println("Recommendation:")
+	for _, candidate := range geminiResponse.Candidates {
+		for _, part := range candidate.Content.Parts {
+			fmt.Println(part.Text)
+		}
+	}
+
 }
