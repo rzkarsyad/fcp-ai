@@ -165,14 +165,12 @@ func convertAnswer(answerStr string) string {
 }
 
 func main() {
-	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file:", err)
 		return
 	}
 
-	// Buka file CSV
 	file, err := os.Open("data-series.csv")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -180,32 +178,26 @@ func main() {
 	}
 	defer file.Close()
 
-	// Baca isi file CSV
 	data, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
 	}
 
-	// Parsing CSV menjadi map
 	table, err := CsvToSlice(string(data))
 	if err != nil {
 		fmt.Println("Error parsing CSV:", err)
 		return
 	}
 
-	// Inisialisasi router Gin
 	router := gin.Default()
 
-	// Middleware untuk static files
 	router.Static("/static", "./static")
 
-	// Endpoint untuk halaman utama
 	router.GET("/", func(c *gin.Context) {
 		c.File("templates/index.html")
 	})
 
-	// Endpoint untuk menerima input dari frontend
 	router.POST("/", func(c *gin.Context) {
 		var input struct {
 			Query string `json:"query"`
@@ -215,7 +207,6 @@ func main() {
 			return
 		}
 
-		// Proses query menggunakan AI Model Connector
 		connector := &AIModelConnector{
 			Client: &http.Client{},
 		}
@@ -225,7 +216,6 @@ func main() {
 			Query: input.Query,
 		}
 
-		// Mendapatkan jawaban dari AI model TAPAS
 		token := os.Getenv("HUGGINGFACE_TOKEN")
 		if token == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "HUGGINGFACE_TOKEN environment variable not set"})
@@ -238,7 +228,6 @@ func main() {
 			return
 		}
 
-		// Convert jawaban dan mendapatkan rekomendasi dari Gemini
 		answerConverted := convertAnswer(response.Answer)
 
 		apiKey := os.Getenv("API_KEY_GEMINI")
@@ -253,7 +242,6 @@ func main() {
 			return
 		}
 
-		// Mengembalikan data ke frontend
 		c.JSON(http.StatusOK, gin.H{
 			"tapas_answer":           response.Answer,
 			"tapas_answer_converted": answerConverted,
@@ -261,6 +249,5 @@ func main() {
 		})
 	})
 
-	// Menjalankan server
 	router.Run(":8080")
-}	
+}
