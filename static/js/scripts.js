@@ -1,3 +1,9 @@
+document.getElementById('input').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {``
+        sendMessage();
+    }
+});
+
 async function sendMessage() {
     const input = document.getElementById('input');
     const message = input.value.trim();
@@ -64,10 +70,10 @@ async function sendMessage() {
 }
 
 function formatResponse(response) {
-    
     return response
-        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')  
-        .replace(/\n\* (.*?)(?=\n|$)/g, '<br>* $1') 
-        .replace(/\n/g, '<br>') 
-        .replace(/\r/g, ''); 
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') 
+        .replace(/\* (.*?)(?=\n|\r|$)/g, '• $1')
+        .replace(/\*/g, '')
+        .replace(/\n/g, '<br>')
+        .replace(/\r/g, '');
 }
