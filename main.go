@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -147,23 +146,6 @@ func (c *AIModelConnector) GeminiRecommendation(query string, table map[string][
 	return geminiResponse, nil
 }
 
-func convertAnswer(answerStr string) string {
-	parts := strings.Split(answerStr, ", ")
-	var sum float64
-
-	for _, part := range parts {
-		numStr := strings.TrimPrefix(part, "SUM > ")
-		num, err := strconv.ParseFloat(numStr, 64)
-		if err == nil {
-			sum += num
-		}
-	}
-
-	answerConverted := fmt.Sprintf("%.1f kWh", sum)
-
-	return answerConverted
-}
-
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -228,8 +210,6 @@ func main() {
 			return
 		}
 
-		answerConverted := convertAnswer(response.Answer)
-
 		apiKey := os.Getenv("API_KEY_GEMINI")
 		if apiKey == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "API_KEY_GEMINI environment variable not set"})
@@ -244,7 +224,6 @@ func main() {
 
 		c.JSON(http.StatusOK, gin.H{
 			"tapas_answer":           response.Answer,
-			"tapas_answer_converted": answerConverted,
 			"gemini_recommendations": geminiResponse.Candidates,
 		})
 	})
