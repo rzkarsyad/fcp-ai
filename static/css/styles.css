@@ -3,26 +3,57 @@ body {
     color: #FFFFFF;
     font-family: Arial, sans-serif;
     display: flex;
-    flex-direction: column; 
-    justify-content: space-between; 
+    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
     height: 100vh;
     margin: 0;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
 
 .chat-container {
     width: 100%;
-    max-width: 800px; 
+    max-width: 800px;
     display: flex;
     flex-direction: column;
-    overflow: hidden; 
-    margin-bottom: auto; 
+    overflow: hidden;
+    margin-bottom: auto;
+    box-sizing: border-box;
 }
 
 .chat-content {
     flex: 1;
     overflow-y: auto;
     padding-top: 32px;
+    box-sizing: border-box;
+    scrollbar-width: thin; /* For Firefox */
+    -ms-overflow-style: none; /* For Internet Explorer and Edge */
+    background-color: transparent; /* Make the scrollbar container background transparent */
+}
+
+/* For Webkit-based browsers (Chrome, Safari, Opera) */
+.chat-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background-color: transparent; /* Set the background color of the scrollbar */
+}
+
+.chat-content::-webkit-scrollbar-thumb {
+    background-color: #4A4A4A; /* Color of the draggable part of the scrollbar */
+    border-radius: 4px;
+}
+
+.chat-content::-webkit-scrollbar-track {
+    background-color: transparent; /* Color of the track */
+}
+
+.chat-content:hover::-webkit-scrollbar-thumb {
+    background-color: #4A4A4A; /* Keep the thumb visible when hovered */
+}
+
+.chat-content:hover::-webkit-scrollbar-track {
+    background-color: transparent; /* Keep the track transparent when hovered */
 }
 
 .chat-bubble {
@@ -32,11 +63,13 @@ body {
 
 .chat-bubble .bubble {
     line-height: 150%;
-    padding: 15px;
+    padding: 12px;
+    word-wrap: break-word;
 }
 
 .chat-bubble.human .bubble {
-    margin-right: 150px;
+    margin-right: 10px;
+    max-width: 500px;
     background-color: #3A3A3A;
     border-top-left-radius: 18px;
     border-top-right-radius: 18px;
@@ -51,12 +84,13 @@ body {
 
 .input-container {
     width: 100%;
-    max-width: 800px; 
+    max-width: 800px;
     display: flex;
     align-items: center;
-    padding: 12px;
+    padding-top: 16px;
+    padding-bottom: 16px;
     background-color: #1E1E1E;
-    padding-bottom: 24px;
+    box-sizing: border-box;
 }
 
 .input-field {
@@ -68,7 +102,7 @@ body {
     outline: none;
     color: white;
     font-size: 14px;
-    margin-right: 10px; 
+    margin-right: 10px;
 }
 
 .send-button {
@@ -80,12 +114,22 @@ body {
     cursor: pointer;
 }
 
-@media (min-width: 800px) {
+@media (min-width: 600px) {
     .chat-container, .input-container {
-        width: 800px; 
+        width: 90%;
     }
 
     .input-field {
-        max-width: calc(800px - 90px); 
+        max-width: calc(90% - 90px);
+    }
+}
+
+@media (min-width: 800px) {
+    .chat-container, .input-container {
+        width: 800px;
+    }
+
+    .input-field {
+        max-width: calc(800px - 90px);
     }
 }
